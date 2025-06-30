@@ -39,7 +39,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const login = async (email: string, password: string) => {
     try {
-      // Call a Supabase function to verify admin credentials
+      // Call the Supabase RPC function to verify admin credentials
       const { data, error } = await supabase.rpc('verify_admin_login', {
         input_email: email,
         input_password: password
@@ -50,8 +50,11 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return { success: false, error: 'Invalid credentials' };
       }
 
-      if (data && data.length > 0) {
-        const admin = { id: data[0].id, email: data[0].email };
+      // Type assertion for the RPC response since TypeScript doesn't know about our custom function
+      const adminData = data as Array<{ id: string; email: string }>;
+
+      if (adminData && adminData.length > 0) {
+        const admin = { id: adminData[0].id, email: adminData[0].email };
         setAdminUser(admin);
         localStorage.setItem('adminUser', JSON.stringify(admin));
         return { success: true };
