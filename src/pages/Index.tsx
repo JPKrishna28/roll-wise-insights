@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,9 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { GraduationCap, Shield, Search, Upload, Plus, Trash2, Users, User } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { GraduationCap, Shield, Search, Upload, Plus, Trash2, Users, User, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { AdminAuthProvider, useAdminAuth } from '@/contexts/AdminAuthContext';
+import AdminLogin from '@/components/AdminLogin';
 
 // Mock student data
 const mockStudents = [
@@ -50,7 +51,7 @@ const mockStudents = [
   }
 ];
 
-const Index = () => {
+const IndexContent = () => {
   const [rollNumber, setRollNumber] = useState('');
   const [searchResult, setSearchResult] = useState(null);
   const [students, setStudents] = useState(mockStudents);
@@ -63,7 +64,9 @@ const Index = () => {
     semester: '',
     branch: ''
   });
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { adminUser, logout } = useAdminAuth();
 
   const handleSearch = () => {
     const student = students.find(s => s.rollNumber.toLowerCase() === rollNumber.toLowerCase());
@@ -91,6 +94,15 @@ const Index = () => {
   };
 
   const handleAddStudent = () => {
+    if (!adminUser) {
+      toast({
+        title: "Access Denied",
+        description: "Please login as admin to add students.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!newStudent.rollNumber || !newStudent.fullName) {
       toast({
         title: "Error",
@@ -125,6 +137,15 @@ const Index = () => {
   };
 
   const handleDeleteStudent = (rollNumber) => {
+    if (!adminUser) {
+      toast({
+        title: "Access Denied",
+        description: "Please login as admin to delete students.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setStudents(students.filter(s => s.rollNumber !== rollNumber));
     toast({
       title: "Student Deleted",
@@ -133,6 +154,16 @@ const Index = () => {
   };
 
   const handleCSVUpload = (event) => {
+    if (!adminUser) {
+      toast({
+        title: "Access Denied",
+        description: "Please login as admin to upload CSV files.",
+        variant: "destructive",
+      });
+      event.target.value = '';
+      return;
+    }
+
     const file = event.target.files[0];
     if (file) {
       toast({
@@ -140,6 +171,14 @@ const Index = () => {
         description: "CSV file processing would be implemented with Supabase integration.",
       });
     }
+  };
+
+  const handleAdminLogout = () => {
+    logout();
+    toast({
+      title: "Logged Out",
+      description: "You have been logged out successfully.",
+    });
   };
 
   return (
@@ -152,6 +191,39 @@ const Index = () => {
             <h1 className="text-4xl font-bold text-gray-800">Student Management System</h1>
           </div>
           <p className="text-gray-600 text-lg">Manage student records and view academic performance</p>
+          
+          {/* Admin Status */}
+          <div className="flex justify-center mt-4">
+            {adminUser ? (
+              <div className="flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-lg">
+                <Shield className="h-4 w-4" />
+                <span>Logged in as: {adminUser.email}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAdminLogout}
+                  className="ml-2 h-6 w-6 p-0 text-green-600 hover:text-green-800"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Admin Login
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Admin Authentication</DialogTitle>
+                  </DialogHeader>
+                  <AdminLogin onClose={() => setIsLoginDialogOpen(false)} />
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
         </div>
 
         <Tabs defaultValue="user" className="w-full">
@@ -265,154 +337,196 @@ const Index = () => {
 
           {/* Admin Panel */}
           <TabsContent value="admin" className="space-y-8">
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* CSV Upload */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Upload className="h-5 w-5" />
-                    Upload Student Data
+            {!adminUser && (
+              <Card className="max-w-2xl mx-auto">
+                <CardHeader className="text-center">
+                  <CardTitle className="flex items-center justify-center gap-2 text-orange-600">
+                    <Shield className="h-5 w-5" />
+                    Admin Access Required
                   </CardTitle>
                   <CardDescription>
-                    Upload a CSV file with student information
+                    Please login as an administrator to access the admin panel and manage student data.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <Input
-                      type="file"
-                      accept=".csv"
-                      onChange={handleCSVUpload}
-                      className="cursor-pointer"
-                    />
-                    <p className="text-sm text-gray-500">
-                      CSV should include: Roll Number, Full Name, Marks, Backlogs, Attendance, Semester, Branch
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Add New Student */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Plus className="h-5 w-5" />
-                    Add New Student
-                  </CardTitle>
-                  <CardDescription>
-                    Manually add a new student record
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Roll Number"
-                      value={newStudent.rollNumber}
-                      onChange={(e) => setNewStudent({...newStudent, rollNumber: e.target.value})}
-                    />
-                    <Input
-                      placeholder="Full Name"
-                      value={newStudent.fullName}
-                      onChange={(e) => setNewStudent({...newStudent, fullName: e.target.value})}
-                    />
-                    <Input
-                      placeholder="Marks"
-                      type="number"
-                      value={newStudent.marks}
-                      onChange={(e) => setNewStudent({...newStudent, marks: e.target.value})}
-                    />
-                    <Input
-                      placeholder="Backlogs"
-                      type="number"
-                      value={newStudent.backlogs}
-                      onChange={(e) => setNewStudent({...newStudent, backlogs: e.target.value})}
-                    />
-                    <Input
-                      placeholder="Attendance %"
-                      type="number"
-                      value={newStudent.attendance}
-                      onChange={(e) => setNewStudent({...newStudent, attendance: e.target.value})}
-                    />
-                    <Input
-                      placeholder="Semester"
-                      value={newStudent.semester}
-                      onChange={(e) => setNewStudent({...newStudent, semester: e.target.value})}
-                    />
-                  </div>
-                  <Input
-                    placeholder="Branch"
-                    value={newStudent.branch}
-                    onChange={(e) => setNewStudent({...newStudent, branch: e.target.value})}
-                  />
-                  <Button onClick={handleAddStudent} className="w-full">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Student
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Student Records Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  All Student Records
-                </CardTitle>
-                <CardDescription>
-                  Manage existing student data ({students.length} students)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {students.map((student, index) => (
-                    <div key={student.rollNumber} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
-                        <div>
-                          <p className="font-semibold">{student.fullName}</p>
-                          <p className="text-sm text-gray-500">{student.rollNumber}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Branch</p>
-                          <p>{student.branch}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Marks</p>
-                          <p className="font-semibold text-blue-600">{student.marks}%</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Attendance</p>
-                          <p className="font-semibold text-green-600">{student.attendance}%</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Status</p>
-                          {(() => {
-                            const performance = getPerformanceStatus(student.marks, student.backlogs, student.attendance);
-                            return (
-                              <Badge className={`${performance.color} text-white text-xs`}>
-                                {performance.status}
-                              </Badge>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteStudent(student.rollNumber)}
-                        className="ml-4"
-                      >
-                        <Trash2 className="h-4 w-4" />
+                <CardContent className="text-center">
+                  <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        Login as Admin
                       </Button>
-                    </div>
-                  ))}
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Admin Authentication</DialogTitle>
+                      </DialogHeader>
+                      <AdminLogin onClose={() => setIsLoginDialogOpen(false)} />
+                    </DialogContent>
+                  </Dialog>
+                </CardContent>
+              </Card>
+            )}
+
+            {adminUser && (
+              <>
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* CSV Upload */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Upload className="h-5 w-5" />
+                        Upload Student Data
+                      </CardTitle>
+                      <CardDescription>
+                        Upload a CSV file with student information
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <Input
+                          type="file"
+                          accept=".csv"
+                          onChange={handleCSVUpload}
+                          className="cursor-pointer"
+                        />
+                        <p className="text-sm text-gray-500">
+                          CSV should include: Roll Number, Full Name, Marks, Backlogs, Attendance, Semester, Branch
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Add New Student */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Plus className="h-5 w-5" />
+                        Add New Student
+                      </CardTitle>
+                      <CardDescription>
+                        Manually add a new student record
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="Roll Number"
+                          value={newStudent.rollNumber}
+                          onChange={(e) => setNewStudent({...newStudent, rollNumber: e.target.value})}
+                        />
+                        <Input
+                          placeholder="Full Name"
+                          value={newStudent.fullName}
+                          onChange={(e) => setNewStudent({...newStudent, fullName: e.target.value})}
+                        />
+                        <Input
+                          placeholder="Marks"
+                          type="number"
+                          value={newStudent.marks}
+                          onChange={(e) => setNewStudent({...newStudent, marks: e.target.value})}
+                        />
+                        <Input
+                          placeholder="Backlogs"
+                          type="number"
+                          value={newStudent.backlogs}
+                          onChange={(e) => setNewStudent({...newStudent, backlogs: e.target.value})}
+                        />
+                        <Input
+                          placeholder="Attendance %"
+                          type="number"
+                          value={newStudent.attendance}
+                          onChange={(e) => setNewStudent({...newStudent, attendance: e.target.value})}
+                        />
+                        <Input
+                          placeholder="Semester"
+                          value={newStudent.semester}
+                          onChange={(e) => setNewStudent({...newStudent, semester: e.target.value})}
+                        />
+                      </div>
+                      <Input
+                        placeholder="Branch"
+                        value={newStudent.branch}
+                        onChange={(e) => setNewStudent({...newStudent, branch: e.target.value})}
+                      />
+                      <Button onClick={handleAddStudent} className="w-full">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Student
+                      </Button>
+                    </CardContent>
+                  </Card>
                 </div>
-              </CardContent>
-            </Card>
+
+                {/* Student Records Table */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      All Student Records
+                    </CardTitle>
+                    <CardDescription>
+                      Manage existing student data ({students.length} students)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {students.map((student, index) => (
+                        <div key={student.rollNumber} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
+                            <div>
+                              <p className="font-semibold">{student.fullName}</p>
+                              <p className="text-sm text-gray-500">{student.rollNumber}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Branch</p>
+                              <p>{student.branch}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Marks</p>
+                              <p className="font-semibold text-blue-600">{student.marks}%</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Attendance</p>
+                              <p className="font-semibold text-green-600">{student.attendance}%</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Status</p>
+                              {(() => {
+                                const performance = getPerformanceStatus(student.marks, student.backlogs, student.attendance);
+                                return (
+                                  <Badge className={`${performance.color} text-white text-xs`}>
+                                    {performance.status}
+                                  </Badge>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteStudent(student.rollNumber)}
+                            className="ml-4"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
         </Tabs>
       </div>
     </div>
+  );
+};
+
+const Index = () => {
+  return (
+    <AdminAuthProvider>
+      <IndexContent />
+    </AdminAuthProvider>
   );
 };
 
