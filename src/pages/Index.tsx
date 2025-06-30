@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,10 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { GraduationCap, Shield, Search, Upload, Plus, Trash2, Users, User, LogOut } from 'lucide-react';
+import { GraduationCap, Shield, Search, Upload, Plus, Trash2, Users, User, LogOut, FileText, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AdminAuthProvider, useAdminAuth } from '@/contexts/AdminAuthContext';
 import AdminLogin from '@/components/AdminLogin';
+import { parseCSV, StudentCSVData } from '@/utils/csvParser';
 
 // Mock student data
 const mockStudents = [
@@ -65,6 +67,10 @@ const IndexContent = () => {
     branch: ''
   });
   const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [csvUploadStatus, setCsvUploadStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [csvError, setCsvError] = useState<string>('');
+  const [csvPreview, setCsvPreview] = useState<StudentCSVData[]>([]);
+  const [showCsvPreview, setShowCsvPreview] = useState(false);
   const { toast } = useToast();
   const { adminUser, logout } = useAdminAuth();
 
@@ -153,7 +159,7 @@ const IndexContent = () => {
     });
   };
 
-  const handleCSVUpload = (event) => {
+  const handleCSVUpload = async (event) => {
     if (!adminUser) {
       toast({
         title: "Access Denied",
@@ -165,12 +171,88 @@ const IndexContent = () => {
     }
 
     const file = event.target.files[0];
-    if (file) {
+    if (!file) return;
+
+    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
       toast({
-        title: "CSV Upload",
-        description: "CSV file processing would be implemented with Supabase integration.",
+        title: "Invalid File Type",
+        description: "Please upload a CSV file.",
+        variant: "destructive",
+      });
+      event.target.value = '';
+      return;
+    }
+
+    setCsvUploadStatus('processing');
+    setCsvError('');
+    setShowCsvPreview(false);
+
+    try {
+      const text = await file.text();
+      const parsedStudents = parseCSV(text);
+      
+      if (parsedStudents.length === 0) {
+        throw new Error('No valid student records found in the CSV file');
+      }
+
+      setCsvPreview(parsedStudents);
+      setShowCsvPreview(true);
+      setCsvUploadStatus('success');
+      
+      toast({
+        title: "CSV Parsed Successfully",
+        description: `Found ${parsedStudents.length} student records. Review and confirm to add them.`,
+      });
+    } catch (error) {
+      setCsvUploadStatus('error');
+      setCsvError(error.message || 'Failed to parse CSV file');
+      toast({
+        title: "CSV Upload Error",
+        description: error.message || 'Failed to parse CSV file',
+        variant: "destructive",
       });
     }
+
+    event.target.value = '';
+  };
+
+  const handleConfirmCSVImport = () => {
+    if (csvPreview.length === 0) return;
+
+    // Check for duplicate roll numbers
+    const existingRollNumbers = students.map(s => s.rollNumber.toLowerCase());
+    const duplicates = csvPreview.filter(student => 
+      existingRollNumbers.includes(student.rollNumber.toLowerCase())
+    );
+
+    if (duplicates.length > 0) {
+      toast({
+        title: "Duplicate Records Found",
+        description: `${duplicates.length} students already exist. They will be skipped.`,
+      });
+    }
+
+    // Add only non-duplicate students
+    const newStudents = csvPreview.filter(student => 
+      !existingRollNumbers.includes(student.rollNumber.toLowerCase())
+    );
+
+    setStudents(prev => [...prev, ...newStudents]);
+    setShowCsvPreview(false);
+    setCsvPreview([]);
+    setCsvUploadStatus('idle');
+
+    toast({
+      title: "Students Imported",
+      description: `Successfully added ${newStudents.length} new students.`,
+    });
+  };
+
+  const handleCancelCSVImport = () => {
+    setShowCsvPreview(false);
+    setCsvPreview([]);
+    setCsvUploadStatus('idle');
+    setCsvError('');
   };
 
   const handleAdminLogout = () => {
@@ -381,17 +463,35 @@ const IndexContent = () => {
                         Upload a CSV file with student information
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                       <div className="space-y-4">
                         <Input
                           type="file"
                           accept=".csv"
                           onChange={handleCSVUpload}
                           className="cursor-pointer"
+                          disabled={csvUploadStatus === 'processing'}
                         />
-                        <p className="text-sm text-gray-500">
-                          CSV should include: Roll Number, Full Name, Marks, Backlogs, Attendance, Semester, Branch
-                        </p>
+                        
+                        {csvUploadStatus === 'processing' && (
+                          <div className="flex items-center gap-2 text-blue-600">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                            <span className="text-sm">Processing CSV file...</span>
+                          </div>
+                        )}
+                        
+                        {csvUploadStatus === 'error' && csvError && (
+                          <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-md">
+                            <AlertCircle className="h-4 w-4" />
+                            <span className="text-sm">{csvError}</span>
+                          </div>
+                        )}
+                        
+                        <div className="text-sm text-gray-500 space-y-1">
+                          <p><strong>Required CSV columns:</strong></p>
+                          <p>Roll Number, Full Name, Marks, Backlogs, Attendance, Semester, Branch</p>
+                          <p className="text-xs text-gray-400">Column names are case-insensitive and spaces are ignored</p>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -455,6 +555,53 @@ const IndexContent = () => {
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* CSV Preview Dialog */}
+                {showCsvPreview && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        CSV Import Preview
+                      </CardTitle>
+                      <CardDescription>
+                        Review the {csvPreview.length} student records before importing
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="max-h-96 overflow-y-auto border rounded-lg">
+                        <div className="grid grid-cols-7 gap-2 p-3 bg-gray-50 font-semibold text-sm border-b">
+                          <div>Roll Number</div>
+                          <div>Full Name</div>
+                          <div>Marks</div>
+                          <div>Backlogs</div>
+                          <div>Attendance</div>
+                          <div>Semester</div>
+                          <div>Branch</div>
+                        </div>
+                        {csvPreview.map((student, index) => (
+                          <div key={index} className="grid grid-cols-7 gap-2 p-3 text-sm border-b hover:bg-gray-50">
+                            <div className="font-medium">{student.rollNumber}</div>
+                            <div>{student.fullName}</div>
+                            <div>{student.marks}%</div>
+                            <div>{student.backlogs}</div>
+                            <div>{student.attendance}%</div>
+                            <div>{student.semester}</div>
+                            <div>{student.branch}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" onClick={handleCancelCSVImport}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleConfirmCSVImport}>
+                          Import {csvPreview.length} Students
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Student Records Table */}
                 <Card>
