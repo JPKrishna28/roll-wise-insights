@@ -16,7 +16,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Insert a default super admin (password will be 'admin123' - change this!)
 INSERT INTO public.admin_users (email, password_hash) 
-VALUES ('superadmin@example.com', crypt('admin123', gen_salt('bf')));
+VALUES ('jaswanth@gmail.com', crypt('Jaswanth@123', gen_salt('bf')));
 
 -- Create policy that only allows authenticated admins to access admin_users table
 CREATE POLICY "Only authenticated admins can access admin_users" 

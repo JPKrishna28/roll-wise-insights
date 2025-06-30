@@ -122,12 +122,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onClose }) => {
           </div>
         </form>
         
-        <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
-          <p><strong>Default Admin:</strong></p>
-          <p>Email: superadmin@example.com</p>
-          <p>Password: admin123</p>
-          <p className="text-xs mt-1 text-orange-600">Please change these credentials after first login!</p>
-        </div>
+        
       </CardContent>
     </Card>
   );
